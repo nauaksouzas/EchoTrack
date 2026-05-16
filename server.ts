@@ -4,17 +4,19 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import apiRoutes from "./server/routes.js"; // Note: .js extension for TSX running or import resolution
+import apiRoutes from "./server/routes.ts"; // Note: .js extension for TSX running or import resolution
 
 async function startServer() {
   const app = express();
-  app.set('trust proxy', 1);
+  app.set("trust proxy", 1);
   const PORT = 3000;
 
-  app.use(cors({
-    origin: true,
-    credentials: true
-  }));
+  app.use(
+    cors({
+      origin: true,
+      credentials: true,
+    }),
+  );
   app.use(express.json());
   app.use(cookieParser());
 
@@ -29,10 +31,10 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
