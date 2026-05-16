@@ -1,6 +1,5 @@
 {
-  "name": "Year Up Weekly Report System",
-  "description": "A comprehensive system for Year Up United students to submit weekly status reports and for coaches to track progress and add custom questions.",
-  "requestFramePermissions": [],
-  "majorCapabilities": []
+  "name": "EchoTrack",
+  "description": "EchoTrack — Weekly reporting and engagement platform by KSP Dominion Group.",
+  "version": "1.0.0"
 }

@@ -5,10 +5,14 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-brand-orange: #ff6b00;
+  --color-brand-orange-light: #ff8533;
+  --color-brand-orange-dark: #cc5600;
 }
 
 @layer base {
   body {
-    @apply font-sans;
+    @apply font-sans bg-[#F8F9FA] text-[#1A1A1A] antialiased;
   }
 }

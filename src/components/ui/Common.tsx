@@ -1,20 +1,23 @@
 import React from 'react';
 
-export const Button = ({ children, className = "", variant = "primary", size = "md", ...props }: any) => {
-  const base = "font-medium transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:pointer-events-none";
-  let sizeClass = "px-6 py-2.5 rounded-xl";
-  if (size === "sm") sizeClass = "px-4 py-1.5 text-sm rounded-lg";
-  if (size === "lg") sizeClass = "px-8 py-3 text-lg rounded-2xl";
+export const Button = ({ children, variant = "primary", size = "md", className = "", ...props }: any) => {
+  let sizeClass = "px-6 py-2.5 text-sm rounded-xl";
+  if (size === "sm") sizeClass = "px-4 py-2 text-xs rounded-lg";
+  if (size === "lg") sizeClass = "px-10 py-4 text-base rounded-2xl";
   
   const variants: any = {
-    primary: "bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-200",
-    secondary: "bg-indigo-50 text-indigo-700 hover:bg-indigo-100",
-    outline: "border-2 border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50",
-    ghost: "text-gray-500 hover:bg-gray-100",
-    danger: "bg-red-50 text-red-600 hover:bg-red-100"
+    primary: "bg-[#ff6b00] text-white hover:bg-[#ff8533] shadow-lg shadow-orange-500/10 hover:shadow-orange-500/20 active:scale-[0.98]",
+    secondary: "bg-white text-gray-900 border border-gray-100 hover:border-brand-orange hover:text-brand-orange shadow-sm",
+    outline: "border border-gray-200 text-gray-600 hover:border-brand-orange hover:text-brand-orange hover:bg-orange-50/30",
+    ghost: "text-gray-500 hover:bg-gray-50 hover:text-gray-900",
+    danger: "bg-red-50 text-red-600 hover:bg-red-100 border border-red-100"
   };
+
   return (
-    <button className={`${base} ${sizeClass} ${variants[variant]} ${className}`} {...props}>
+    <button 
+      className={`${sizeClass} ${variants[variant]} font-bold tracking-tight transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
+      {...props}
+    >
       {children}
     </button>
   );
@@ -23,38 +26,52 @@ export const Button = ({ children, className = "", variant = "primary", size = "
 export const Card = ({ children, className = "", onClick, ...props }: any) => (
   <div 
     onClick={onClick}
-    className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''} ${className}`} 
+    className={`bg-white rounded-[2.5rem] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.02)] overflow-hidden ${onClick ? 'cursor-pointer hover:shadow-[0_20px_50px_rgba(0,0,0,0.04)] transition-all duration-500 hover:-translate-y-1' : ''} ${className}`} 
     {...props}
   >
     {children}
   </div>
 );
 
-export const Input = ({ label, value, onChange, labelClassName = "text-sm font-semibold text-gray-700", className = "", wrapperClassName = "", ...props }: any) => (
-  <div className={`space-y-1.5 ${wrapperClassName}`}>
-    {label && <label className={labelClassName}>{label}{props.required && <span className="text-red-500 ml-1">*</span>}</label>}
+export const Input = ({ label, value, onChange, labelClassName = "text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-2 ml-1", className = "", wrapperClassName = "", ...props }: any) => (
+  <div className={`flex flex-col ${wrapperClassName}`}>
+    {label && <label className={labelClassName}>{label}{props.required && <span className="text-brand-orange ml-1">*</span>}</label>}
     <input
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all ${className}`}
+      className={`w-full px-6 py-4 rounded-2xl border border-gray-100 focus:border-brand-orange-light focus:ring-4 focus:ring-orange-50/50 outline-none transition-all placeholder:text-gray-200 text-gray-900 font-medium ${className}`}
       {...props}
     />
   </div>
 );
 
-export const Select = ({ label, value, onChange, options, placeholder, labelClassName = "text-sm font-semibold text-gray-700", className = "", wrapperClassName = "", ...props }: any) => (
-  <div className={`space-y-1.5 ${wrapperClassName}`}>
-    {label && <label className={labelClassName}>{label}{props.required && <span className="text-red-500 ml-1">*</span>}</label>}
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={`w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all bg-white ${className}`}
-      {...props}
-    >
-      <option value="">{placeholder || "Select an option"}</option>
-      {options.map((opt: any) => (
-        <option key={opt.id || opt} value={opt.id || opt}>{opt.name || opt}</option>
-      ))}
-    </select>
+type SelectOption = { id?: string; name?: string; value?: string; label?: string };
+
+export const Select = ({
+  label, value, onChange, options, placeholder, disabled,
+  labelClassName = "text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-2 ml-1",
+  className = "", wrapperClassName = "", ...props
+}: any) => (
+  <div className={`flex flex-col ${wrapperClassName}`}>
+    {label && <label className={labelClassName}>{label}{props.required && <span className="text-brand-orange ml-1">*</span>}</label>}
+    <div className="relative">
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full px-6 py-4 rounded-2xl border border-gray-100 focus:border-brand-orange-light focus:ring-4 focus:ring-orange-50/50 outline-none transition-all bg-white appearance-none text-gray-900 font-medium disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
+        {...props}
+      >
+        <option value="">{placeholder || "Select an option"}</option>
+        {(options as SelectOption[]).map((opt) => {
+          const val = opt.value ?? opt.id ?? String(opt);
+          const lbl = opt.label ?? opt.name ?? String(opt);
+          return <option key={val} value={val}>{lbl}</option>;
+        })}
+      </select>
+      <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+    </div>
   </div>
 );

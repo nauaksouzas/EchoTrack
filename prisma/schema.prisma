@@ -1,0 +1,312 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id            String        @id @default(cuid())
+  email         String        @unique
+  password      String        @default("")
+  name          String
+  role          String        @default("STUDENT") // Admin, Program_Manager, etc.
+  accountStatus String        @default("ACTIVE") @map("account_status")
+  inviteToken   String?       @unique @map("invite_token")
+  avatarUrl     String?       @map("avatar_url")
+  isActive      Boolean       @default(true) @map("is_active")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  managerId           String?  @map("manager_id")
+  manager             User?    @relation("ManagedStaff", fields: [managerId], references: [id], onDelete: SetNull)
+  managedStaff        User[]   @relation("ManagedStaff")
+
+  instructorPathwayId String?  @map("instructor_pathway_id")
+  instructorPathway   Pathway? @relation("InstructorPathway", fields: [instructorPathwayId], references: [id], onDelete: SetNull)
+
+  studentProfile           StudentProfile?
+  classesTaught            ClassModel[]       @relation("InstructorClasses")
+  assignedStudents         StudentProfile[]   @relation("CoachStudents")
+  pmStudents               StudentProfile[]   @relation("PMStudents")
+  managedCommunities       Community[]        @relation("PMCommunities")
+  weeklyReports            WeeklyReport[]
+  coachFeedbacks           CoachFeedback[]
+  targetedQuestionsCreated TargetedQuestion[] @relation("CreatedByStaff")
+  targetedAnswers          TargetedAnswer[]
+  alerts                   Alert[]
+  notifications            Notification[]
+  auditLogs                AuditLog[]         @relation("AuditActor")
+
+  @@map("users")
+}
+
+model Community {
+  id               String   @id @default(cuid())
+  name             String
+  description      String?
+  programManagerId String?  @map("program_manager_id")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  programManager  User?            @relation("PMCommunities", fields: [programManagerId], references: [id], onDelete: SetNull)
+  studentProfiles StudentProfile[]
+
+  @@map("communities")
+}
+
+model Pathway {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  classes         ClassModel[]
+  studentProfiles StudentProfile[]
+  instructors     User[]           @relation("InstructorPathway")
+  reportCycles    ReportCycle[]
+
+  @@map("pathways")
+}
+
+model ClassModel {
+  id           String   @id @default(cuid())
+  name         String
+  instructorId String?  @map("instructor_id")
+  schedule     String?
+  pathwayId    String   @map("pathway_id")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  instructor              User?                    @relation("InstructorClasses", fields: [instructorId], references: [id], onDelete: SetNull)
+  pathway                 Pathway                  @relation(fields: [pathwayId], references: [id], onDelete: Cascade)
+  classRatings            ClassRating[]
+  studentClassEnrollments StudentClassEnrollment[]
+
+  @@map("classes")
+}
+
+model StudentProfile {
+  id               String   @id @default(cuid())
+  userId           String   @unique @map("user_id")
+  coachId          String?  @map("coach_id")
+  programManagerId String?  @map("program_manager_id")
+  communityId      String?  @map("community_id")
+  pathwayId        String?  @map("pathway_id")
+  phone            String?
+  bio              String?
+  accentColor      String   @default("#FF7A00") @map("accent_color")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  user             User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  coach            User?                    @relation("CoachStudents", fields: [coachId], references: [id], onDelete: SetNull)
+  programManager   User?                    @relation("PMStudents", fields: [programManagerId], references: [id], onDelete: SetNull)
+  community        Community?               @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  pathway          Pathway?                 @relation(fields: [pathwayId], references: [id], onDelete: SetNull)
+  classEnrollments StudentClassEnrollment[]
+
+  @@map("student_profiles")
+}
+
+model StudentClassEnrollment {
+  id               String   @id @default(cuid())
+  studentProfileId String   @map("student_profile_id")
+  classId          String   @map("class_id")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  classModel     ClassModel     @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([studentProfileId, classId])
+  @@map("student_class_enrollments")
+}
+
+model ReportCycle {
+  id        String      @id @default(cuid())
+  name      String
+  startDate DateTime    @map("start_date")
+  endDate   DateTime    @map("end_date")
+  status    String      @default("OPEN")
+  pathwayId String?     @map("pathway_id")
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  pathway           Pathway?           @relation(fields: [pathwayId], references: [id], onDelete: SetNull)
+  weeklyReports     WeeklyReport[]
+  targetedQuestions TargetedQuestion[]
+
+  @@map("report_cycles")
+}
+
+model WeeklyReport {
+  id                String       @id @default(cuid())
+  studentId         String       @map("student_id")
+  cycleId           String       @map("cycle_id")
+  status            String       @default("DRAFT")
+  submittedAt       DateTime?    @map("submitted_at")
+
+  energy            Int?         @default(5)
+  mood              Int?         @default(5)
+  attendance        Int?         @default(100)
+  confidence        Int?         @default(5)
+
+  weeklyTopic       String?      @map("weekly_topic")
+  highlights        String?      
+  academicProgress  String?      @map("academic_progress") 
+  classExperience   String?      @map("class_experience") 
+  instructorSupport String?      @map("instructor_support") 
+  events            String?      
+  upcomingEvents    String?      @map("upcoming_events") 
+  challengesText    String?      @map("challenges_text") 
+  challengesTags    String       @default("[]") @map("challenges_tags")
+  supportNeeded     String?      @map("support_needed") 
+  needsSupport      Boolean      @default(false) @map("needs_support")
+  reflection        String?      
+  goals             String?      
+
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  student         User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  cycle           ReportCycle      @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  classRatings    ClassRating[]
+  coachFeedback   CoachFeedback[]
+  targetedAnswers TargetedAnswer[]
+
+  @@unique([studentId, cycleId])
+  @@index([studentId])
+  @@index([cycleId])
+  @@map("weekly_reports")
+}
+
+model ClassRating {
+  id       String           @id @default(cuid())
+  reportId String           @map("report_id")
+  classId  String           @map("class_id")
+  rating   String           @default("MEETING")
+  comment  String?
+
+  report     WeeklyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  classModel ClassModel   @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, classId])
+  @@map("class_ratings")
+}
+
+model CoachFeedback {
+  id        String   @id @default(cuid())
+  reportId  String   @map("report_id")
+  coachId   String   @map("coach_id")
+  feedback  String   
+  createdAt DateTime @default(now()) @map("created_at")
+
+  report WeeklyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  coach  User         @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@map("coach_feedbacks")
+}
+
+model TargetedQuestion {
+  id        String   @id @default(cuid())
+  studentId String   @map("student_id")
+  creatorId String?  @map("creator_id")
+  question  String   
+  isActive  Boolean  @default(true) @map("is_active")
+  cycleId   String?  @map("cycle_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  creator User?            @relation("CreatedByStaff", fields: [creatorId], references: [id], onDelete: SetNull)
+  cycle   ReportCycle?     @relation(fields: [cycleId], references: [id], onDelete: SetNull)
+  answers TargetedAnswer[]
+
+  @@map("targeted_questions")
+}
+
+model TargetedAnswer {
+  id         String   @id @default(cuid())
+  questionId String   @map("question_id")
+  reportId   String   @map("report_id")
+  studentId  String   @map("student_id")
+  answer     String   
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  question TargetedQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  report   WeeklyReport     @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  student  User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, reportId])
+  @@map("targeted_answers")
+}
+
+model Alert {
+  id          String        @id @default(cuid())
+  studentId   String        @map("student_id")
+  type        String        @default("GENERAL")
+  severity    String        @default("MEDIUM")
+  description String        
+  resolved    Boolean       @default(false)
+  resolvedAt  DateTime?     @map("resolved_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([resolved])
+  @@map("alerts")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String
+  isRead    Boolean  @default(false) @map("is_read")
+  link      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  actorId     String?     @map("actor_id")
+  actorRole   String?     @map("actor_role")
+  action      String
+  entityType  String      @map("entity_type")
+  entityId    String?     @map("entity_id")
+  description String      
+  metadata    String?
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model AppSettings {
+  id                   String   @id @default("singleton")
+  organizationName     String   @default("KSP Dominion Group") @map("organization_name")
+  productName          String   @default("EchoTrack") @map("product_name")
+  primaryColor         String   @default("#FF7A00") @map("primary_color")
+  weeklyDueDay         Int      @default(5) @map("weekly_due_day") // 0=Sun … 5=Fri
+  weeklyDueHour        Int      @default(17) @map("weekly_due_hour")
+  autoCloseCycles      Boolean  @default(false) @map("auto_close_cycles")
+  alertThresholdEnergy Int      @default(3) @map("alert_threshold_energy")
+  alertThresholdMood   Int      @default(3) @map("alert_threshold_mood")
+  alertThresholdAttend Int      @default(70) @map("alert_threshold_attend")
+  alertThresholdConf   Int      @default(3) @map("alert_threshold_conf")
+  outlookEnabled       Boolean  @default(false) @map("outlook_enabled")
+  brightspaceEnabled   Boolean  @default(false) @map("brightspace_enabled")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
