@@ -26,10 +26,16 @@ export async function safeFetch(url: string, options: RequestInit = {}) {
   try {
     const data = JSON.parse(text);
     if (!response.ok) {
-      throw new Error(data.error || `Request failed with status ${response.status}`);
+      const err: any = new Error(data.error || `Request failed with status ${response.status}`);
+      err.status = response.status;
+      // Copy other properties like email, name so caller can use them
+      if (data.email) err.email = data.email;
+      if (data.name) err.name = data.name;
+      throw err;
     }
     return data;
-  } catch (e) {
+  } catch (e: any) {
+    if (e.status) throw e; // Already our mapped error above
     console.error(`[safeFetch] Failed to parse JSON from ${url}. Body:`, text);
     throw new Error("Failed to process server response.");
   }

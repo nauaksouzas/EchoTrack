@@ -2,6 +2,8 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import { safeFetch } from '../lib/fetchUtils';
+
 interface User {
   id: string;
   email: string;
@@ -28,85 +30,49 @@ export function AuthProvider({ children }: { children: any }) {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    fetch('/api/auth/session', { headers, credentials: 'include' })
-      .then(async (res) => {
-        if (!res.ok) return { user: null };
-        
-        const contentType = res.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          const text = await res.text();
-          if (text.includes('Cookie check')) {
-            console.error('Session check intercepted by platform cookie check. Browser may be blocking third-party cookies.');
-          } else {
-            console.error('Session check failed: Non-JSON response', text);
-          }
-          return { user: null };
-        }
-        
-        return res.json();
-      })
+    safeFetch('/api/auth/session', { headers })
       .then(data => setUser(data.user || null))
-      .catch(() => setUser(null))
+      .catch((e) => {
+        console.error('Session check failed:', e);
+        setUser(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
   const login = async (email: string, password: string) => {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ email, password })
-    });
-    
-    const contentType = res.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      const text = await res.text();
-      if (text.includes('Cookie check')) {
-        throw new Error("Action required to load your app: Your browser is blocking a required security cookie. Please open the app in a new tab or enable third-party cookies.");
-      }
-      console.error('Server returned non-JSON response:', text);
-      throw new Error(`Server error: Expected JSON but received ${contentType || 'unknown content'}.`);
+    try {
+      const data = await safeFetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      
+      if (data.token) localStorage.setItem('auth_token', data.token);
+      setUser(data.user);
+    } catch (e: any) {
+      console.error('Login error:', e);
+      throw e;
     }
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-    if (data.token) localStorage.setItem('auth_token', data.token);
-    setUser(data.user);
   };
 
   const loginWithProvider = async (provider: 'google' | 'microsoft' | 'apple') => {
     try {
       const { signInWith } = await import('../firebase');
       const result = await signInWith(provider);
-      const res = await fetch('/api/auth/oauth', {
+      
+      const data = await safeFetch('/api/auth/oauth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ idToken: result.idToken }),
       });
       
-      const contentType = res.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await res.text();
-        console.error('[OAuth] Server returned non-JSON:', text);
-        throw new Error('Server returned invalid response. Please try again.');
-      }
-
-      const data = await res.json();
-      if (!res.ok) {
-        const err: any = new Error(data.error || 'OAuth failed');
-        err.status = res.status;
-        err.email = data.email;
-        err.name = data.name;
-        throw err;
-      }
       if (data.token) localStorage.setItem('auth_token', data.token);
       setUser(data.user);
     } catch (error: any) {
-      if (error.code === 'auth/unauthorized-domain' || error.message?.includes('unauthorized-domain')) {
+      if (error.code === 'auth/unauthorized-domain' || error.message?.includes('unauthorized-domain') || error.message?.includes('auth/unauthorized-domain')) {
         const domain = window.location.hostname;
         console.error(`[Firebase] Domain "${domain}" is not authorized.`);
-        throw new Error(`Domain not authorized. Please add "${domain}" to your Firebase Authorized Domains list.`);
+        throw new Error(`Domain not authorized. Please open Firebase Console and add "${domain}" to Authentication -> Settings -> Authorized Domains.`);
       }
       throw error;
     }
@@ -116,7 +82,12 @@ export function AuthProvider({ children }: { children: any }) {
     const token = localStorage.getItem('auth_token');
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    await fetch('/api/auth/logout', { method: 'POST', headers, credentials: 'include' });
+    
+    try {
+      await safeFetch('/api/auth/logout', { method: 'POST', headers });
+    } catch(e) {
+      console.error('Logout error:', e);
+    }
     localStorage.removeItem('auth_token');
     setUser(null);
   };
