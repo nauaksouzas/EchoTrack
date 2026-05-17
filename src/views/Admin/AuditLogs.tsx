@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card } from '../../components/ui/Common';
 import { LoadingState, ErrorState, EmptyState } from '../../components/ui/States';
+import { safeFetch } from '../../lib/fetchUtils';
 import { format } from 'date-fns';
 import { ShieldCheck } from 'lucide-react';
 
@@ -13,9 +14,7 @@ export function AuditLogs() {
     setLoading(true);
     setError(null);
     try {
-        const res = await fetch('/api/admin/audit', { credentials: 'include' });
-        if (!res.ok) throw new Error('Failed to fetch audit records');
-        const data = await res.json();
+        const data = await safeFetch('/api/admin/audit');
         setLogs(data);
     } catch (e: any) {
         console.error('Failed to load audit logs', e);

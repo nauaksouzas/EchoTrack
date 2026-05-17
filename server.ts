@@ -26,6 +26,15 @@ async function startServer() {
   // Mount the Prisma/JWT API
   app.use("/api", apiRoutes);
 
+  // Global Error Handler for /api to ensure JSON responses
+  app.use("/api", (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error(`[API Error] ${req.method} ${req.path}:`, err);
+    res.status(err.status || 500).json({ 
+      error: err.message || "Internal Server Error",
+      path: req.path
+    });
+  });
+
   // API 404 fallback to prevent HTML response for failed /api requests
   app.use("/api", (req, res) => {
     res.status(404).json({ error: `API route not found: ${req.method} ${req.originalUrl}` });

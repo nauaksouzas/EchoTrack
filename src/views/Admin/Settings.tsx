@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Card, Button, Input } from '../../components/ui/Common';
+import { safeFetch } from '../../lib/fetchUtils';
 import { toast } from 'sonner';
 
 export function Settings() {
   const [settings, setSettings] = useState<any>({});
   
   useEffect(() => {
-    fetch('/api/admin/settings', { credentials: "include" })
-      .then(res => res.json())
+    safeFetch('/api/admin/settings')
       .then(data => setSettings(data))
       .catch(e => console.error('Failed to load settings', e));
   }, []);
@@ -15,18 +15,14 @@ export function Settings() {
   const handleSave = async (e: any) => {
     e.preventDefault();
     try {
-        const res = await fetch('/api/admin/settings', { 
+        await safeFetch('/api/admin/settings', { 
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(settings)
         });
-        if (res.ok) {
-          toast.success('Settings saved successfully');
-        } else {
-          toast.error('Failed to save settings');
-        }
-    } catch (e) {
-        toast.error('Connection error while saving settings');
+        toast.success('Settings saved successfully');
+    } catch (e: any) {
+        toast.error(e.message || 'Failed to save settings');
     }
   };
 

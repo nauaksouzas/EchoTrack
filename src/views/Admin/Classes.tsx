@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card, Button, Input } from '../../components/ui/Common';
+import { safeFetch } from '../../lib/fetchUtils';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -14,17 +15,18 @@ export function Classes() {
   const [schedule, setSchedule] = useState('');
 
   const fetchData = async () => {
-    const [cRes, pRes, iRes] = await Promise.all([
-      fetch('/api/admin/classes', { credentials: 'include' }),
-      fetch('/api/admin/pathways', { credentials: 'include' }),
-      fetch('/api/admin/instructors', { credentials: 'include' })
-    ]);
-    if (cRes.ok && pRes.ok && iRes.ok) {
-      setClasses(await cRes.json());
-      const pData = await pRes.json();
+    try {
+      const [cData, pData, iData] = await Promise.all([
+        safeFetch('/api/admin/classes'),
+        safeFetch('/api/admin/pathways'),
+        safeFetch('/api/admin/instructors')
+      ]);
+      setClasses(cData);
       setPathways(pData);
-      setInstructors(await iRes.json());
+      setInstructors(iData);
       if (pData.length > 0 && !pathwayId) setPathwayId(pData[0].id);
+    } catch (e: any) {
+      console.error('Fetch Data Failed:', e);
     }
   };
 
@@ -36,28 +38,29 @@ export function Classes() {
     e.preventDefault();
     if (!pathwayId) return toast.error('Pathway is required');
     
-    const res = await fetch('/api/admin/classes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ name, pathwayId, instructorId: instructorId || null, schedule })
-    });
-    if (res.ok) {
+    try {
+      await safeFetch('/api/admin/classes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, pathwayId, instructorId: instructorId || null, schedule })
+      });
       toast.success('Class created');
       setName('');
       setSchedule('');
       setInstructorId('');
       fetchData();
-    } else {
-      toast.error('Failed to create class');
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to create class');
     }
   };
 
   const handleDeactivate = async (id: string) => {
-    const res = await fetch(`/api/admin/classes?id=${id}`, { method: 'DELETE', credentials: 'include' });
-    if (res.ok) {
-        toast.success('Class deactivated');
-        fetchData();
+    try {
+      await safeFetch(`/api/admin/classes?id=${id}`, { method: 'DELETE' });
+      toast.success('Class deactivated');
+      fetchData();
+    } catch (e: any) {
+      toast.error(e.message || 'Error occurred');
     }
   };
 

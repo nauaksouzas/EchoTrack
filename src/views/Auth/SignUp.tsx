@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Card, Button, Input, Select } from '../../components/ui/Common';
+import { safeFetch } from '../../lib/fetchUtils';
 import { Logo } from '../../components/Logo';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -31,11 +32,15 @@ export function SignUp() {
   const [options, setOptions] = useState({ pms: [], coaches: [], pathways: [], classes: [] });
 
   const fetchOptions = async () => {
-    const params = new URLSearchParams();
-    if (formData.programManagerId) params.append('programManagerId', formData.programManagerId);
-    if (formData.pathwayId) params.append('pathwayId', formData.pathwayId);
-    const res = await fetch(`/api/signup/options?${params}`, { credentials: "include" });
-    if (res.ok) setOptions(await res.json());
+    try {
+      const params = new URLSearchParams();
+      if (formData.programManagerId) params.append('programManagerId', formData.programManagerId);
+      if (formData.pathwayId) params.append('pathwayId', formData.pathwayId);
+      const data = await safeFetch(`/api/signup/options?${params}`);
+      setOptions(data);
+    } catch (e: any) {
+      console.error('Fetch options failed:', e);
+    }
   };
 
   useEffect(() => { fetchOptions(); }, [formData.programManagerId, formData.pathwayId]);
@@ -59,13 +64,11 @@ export function SignUp() {
     if (formData.classIds.length === 0) return toast.error('Please select at least one class');
     setLoading(true);
     try {
-      const res = await fetch('/api/signup', { credentials: "include", 
+      const data = await safeFetch('/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
       if (data.token) localStorage.setItem('auth_token', data.token);
       
       toast.success('Registration successful!');

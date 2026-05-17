@@ -75,24 +75,41 @@ export function AuthProvider({ children }: { children: any }) {
   };
 
   const loginWithProvider = async (provider: 'google' | 'microsoft' | 'apple') => {
-    const { signInWith } = await import('../firebase');
-    const result = await signInWith(provider);
-    const res = await fetch('/api/auth/oauth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ idToken: result.idToken }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      const err: any = new Error(data.error || 'OAuth failed');
-      err.status = res.status;
-      err.email = data.email;
-      err.name = data.name;
-      throw err;
+    try {
+      const { signInWith } = await import('../firebase');
+      const result = await signInWith(provider);
+      const res = await fetch('/api/auth/oauth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ idToken: result.idToken }),
+      });
+      
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        console.error('[OAuth] Server returned non-JSON:', text);
+        throw new Error('Server returned invalid response. Please try again.');
+      }
+
+      const data = await res.json();
+      if (!res.ok) {
+        const err: any = new Error(data.error || 'OAuth failed');
+        err.status = res.status;
+        err.email = data.email;
+        err.name = data.name;
+        throw err;
+      }
+      if (data.token) localStorage.setItem('auth_token', data.token);
+      setUser(data.user);
+    } catch (error: any) {
+      if (error.code === 'auth/unauthorized-domain' || error.message?.includes('unauthorized-domain')) {
+        const domain = window.location.hostname;
+        console.error(`[Firebase] Domain "${domain}" is not authorized.`);
+        throw new Error(`Domain not authorized. Please add "${domain}" to your Firebase Authorized Domains list.`);
+      }
+      throw error;
     }
-    if (data.token) localStorage.setItem('auth_token', data.token);
-    setUser(data.user);
   };
 
   const logout = async () => {

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card, Button, Input } from '../../components/ui/Common';
+import { safeFetch } from '../../lib/fetchUtils';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -12,17 +13,18 @@ export function Communities() {
   const [programManagerId, setProgramManagerId] = useState('');
 
   const fetchData = async () => {
-    const [cRes, pmRes] = await Promise.all([
-      fetch('/api/admin/communities', { credentials: 'include' }),
-      fetch('/api/admin/invite', { credentials: 'include' }) // /api/admin/invite returns PMs
-    ]);
-    if (cRes.ok && pmRes.ok) {
-        setCommunities(await cRes.json());
-        const pmData = await pmRes.json();
-        // filter active PMs
-        const activePMs = pmData.filter((p: any) => p.accountStatus === 'ACTIVE');
-        setPms(activePMs);
-        if (activePMs.length > 0 && !programManagerId) setProgramManagerId(activePMs[0].id);
+    try {
+      const [cData, pmData] = await Promise.all([
+        safeFetch('/api/admin/communities'),
+        safeFetch('/api/admin/invite') // /api/admin/invite returns PMs
+      ]);
+      setCommunities(cData);
+      // filter active PMs
+      const activePMs = pmData.filter((p: any) => p.accountStatus === 'ACTIVE');
+      setPms(activePMs);
+      if (activePMs.length > 0 && !programManagerId) setProgramManagerId(activePMs[0].id);
+    } catch (e: any) {
+      console.error('Fetch Data Failed:', e);
     }
   };
 
@@ -32,19 +34,18 @@ export function Communities() {
 
   const handleCreate = async (e: any) => {
     e.preventDefault();
-    const res = await fetch('/api/admin/communities', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ name, description, programManagerId: programManagerId || null })
-    });
-    if (res.ok) {
+    try {
+      await safeFetch('/api/admin/communities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description, programManagerId: programManagerId || null })
+      });
       toast.success('Community created');
       setName('');
       setDescription('');
       fetchData();
-    } else {
-      toast.error('Failed to create community');
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to create community');
     }
   };
 
@@ -53,10 +54,12 @@ export function Communities() {
         toast.error('Cannot deactivate community with active students');
         return;
     }
-    const res = await fetch(`/api/admin/communities?id=${id}`, { method: 'DELETE', credentials: 'include' });
-    if (res.ok) {
-        toast.success('Community deactivated');
-        fetchData();
+    try {
+      await safeFetch(`/api/admin/communities?id=${id}`, { method: 'DELETE' });
+      toast.success('Community deactivated');
+      fetchData();
+    } catch (e: any) {
+      toast.error(e.message || 'Error occurred');
     }
   };
 

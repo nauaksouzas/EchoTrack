@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Card, Button, Input } from '../../components/ui/Common';
+import { safeFetch } from '../../lib/fetchUtils';
 import { Logo } from '../../components/Logo';
 
 export function SetupAccount() {
@@ -20,13 +21,11 @@ export function SetupAccount() {
 
     setLoading(true);
     try {
-      const res = await fetch('/api/setup-account', { credentials: "include", 
+      const data = await safeFetch('/api/setup-account', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, password })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
       if (data.token) localStorage.setItem('auth_token', data.token);
 
       toast.success('Account setup complete! Redirecting...');
