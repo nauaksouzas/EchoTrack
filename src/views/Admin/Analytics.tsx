@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Card } from '../../components/ui/Common';
+import { safeFetch } from '../../lib/fetchUtils';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 
 export function Analytics() {
   const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
-    fetch('/api/admin/analytics', { credentials: "include" })
-      .then(res => res.json())
-      .then(data => setStats(data));
+    safeFetch('/api/admin/analytics')
+      .then(data => setStats(data))
+      .catch(e => console.error('Failed to load analytics', e));
   }, []);
 
   if (!stats) return <div className="p-8">Loading analytics...</div>;

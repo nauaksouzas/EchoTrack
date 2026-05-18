@@ -3,11 +3,13 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { authMiddleware, AuthRequest, roleMiddleware } from './auth';
+import { authMiddleware, AuthRequest, roleMiddleware } from './auth.js';
+import { JWT_SECRET } from './config.js';
 
 const router = Router();
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_ksp_override_me';
+
+console.log("[SERVER] Mounting routes...");
 
 function getCookieOptions(req: any) {
   const forwardedProto = req.headers?.['x-forwarded-proto'];
@@ -22,7 +24,7 @@ function getCookieOptions(req: any) {
   };
 }
 
-import { verifyIdToken } from './firebase-admin';
+import { verifyIdToken } from './firebase-admin.js';
 
 router.post('/auth/oauth', async (req, res) => {
   try {
@@ -33,7 +35,8 @@ router.post('/auth/oauth', async (req, res) => {
     try {
       decoded = await verifyIdToken(idToken);
     } catch (e) {
-      return res.status(401).json({ error: 'Invalid Firebase token' });
+      const message = e instanceof Error ? e.message : 'Invalid Firebase token';
+      return res.status(401).json({ error: message });
     }
 
     if (!decoded.email) {
@@ -155,8 +158,21 @@ router.post('/signup', async (req, res) => {
         const { name, email, password, programManagerId, coachId, pathwayId, classIds } = req.body;
         const normalizedEmail = String(email).toLowerCase().trim();
 
+        if (!name || !email || !password || password.length < 8) {
+            return res.status(400).json({ error: 'Valid name, email, and password (min 8 chars) required.' });
+        }
+
         const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
         if (existing) return res.status(400).json({ error: 'Email already in use' });
+
+        if (programManagerId) {
+            const pm = await prisma.user.findUnique({ where: { id: programManagerId } });
+            if (!pm || pm.role !== 'PROGRAM_MANAGER') return res.status(400).json({ error: 'Invalid PM selected' });
+        }
+        if (coachId) {
+            const coach = await prisma.user.findUnique({ where: { id: coachId } });
+            if (!coach || coach.role !== 'COACH') return res.status(400).json({ error: 'Invalid coach selected' });
+        }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -252,6 +268,29 @@ router.post('/reports', authMiddleware, roleMiddleware(['STUDENT']), async (req,
             }
         });
 
+        // Targeted Answers
+        if (payload.targetedAnswers && Array.isArray(payload.targetedAnswers)) {
+            for (const ans of payload.targetedAnswers) {
+                if (ans.questionId && ans.answer !== undefined) {
+                    await prisma.targetedAnswer.upsert({
+                        where: {
+                            questionId_reportId: {
+                                questionId: ans.questionId,
+                                reportId: report.id
+                            }
+                        },
+                        update: { answer: ans.answer, studentId },
+                        create: {
+                            questionId: ans.questionId,
+                            reportId: report.id,
+                            studentId,
+                            answer: ans.answer
+                        }
+                    });
+                }
+            }
+        }
+
         if (payload.classRatings && Array.isArray(payload.classRatings)) {
             await prisma.classRating.deleteMany({ where: { reportId: report.id } });
             await prisma.classRating.createMany({
@@ -342,19 +381,29 @@ router.post('/reports', authMiddleware, roleMiddleware(['STUDENT']), async (req,
 router.post('/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log(`[LOGIN ATTEMPT] Email: ${email}`);
+    
     const user = await prisma.user.findUnique({ where: { email } });
     
-    if (!user || user.accountStatus !== 'ACTIVE' || !user.isActive) {
+    if (!user) {
+      console.log(`[LOGIN FAILED] User not found: ${email}`);
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    if (user.accountStatus !== 'ACTIVE' || !user.isActive) {
+      console.log(`[LOGIN FAILED] User inactive or pending: ${email}, status: ${user.accountStatus}`);
+      return res.status(401).json({ error: 'Account is not active' });
     }
 
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) {
+      console.log(`[LOGIN FAILED] Wrong password for: ${email}`);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '1d' });
     
+    console.log(`[LOGIN SUCCESS] User: ${user.name} (${user.role})`);
     res.cookie('token', token, getCookieOptions(req));
 
     await prisma.auditLog.create({
@@ -406,7 +455,7 @@ router.get('/admin/invite', authMiddleware, roleMiddleware(['ADMIN']), async (re
     }
 });
 
-import { generateDocx, generatePdf } from './exports';
+import { generateDocx, generatePdf } from './exports.js';
 
 router.get('/reports/export-docx', authMiddleware, async (req: any, res: any) => {
     try {
@@ -547,31 +596,47 @@ router.get('/admin/analytics', authMiddleware, roleMiddleware(['ADMIN']), async 
         let studentsNeedingSupport = 0;
 
         if (cycle) {
-            const submittedCount = await prisma.weeklyReport.count({ where: { cycleId: cycle.id } });
+            const submittedCount = await prisma.weeklyReport.count({ where: { cycleId: cycle.id, status: 'SUBMITTED' } });
             const reviewedCount = await prisma.weeklyReport.count({ where: { cycleId: cycle.id, status: 'REVIEWED' } });
             if (totalStudents > 0) submissionRate = Math.round((submittedCount / totalStudents) * 100);
             if (submittedCount > 0) reviewedRate = Math.round((reviewedCount / submittedCount) * 100);
         }
 
         const openCyclesPastDue = await prisma.reportCycle.count({ where: { status: 'OPEN', endDate: { lt: new Date() } } });
-        // overdue reports simplification
-        const overdueReports = openCyclesPastDue * totalStudents; // roughly
+        const overdueReports = openCyclesPastDue * totalStudents;
 
-        studentsNeedingSupport = await (prisma as any).$queryRaw`SELECT COUNT(DISTINCT "studentId") as cnt FROM "WeeklyReport" WHERE "needsSupport" = 1`;
-        if (typeof studentsNeedingSupport === 'object' && (studentsNeedingSupport as any)?.[0]?.cnt) {
-            studentsNeedingSupport = Number((studentsNeedingSupport as any)[0].cnt);
-        } else {
-             const reports = await prisma.weeklyReport.findMany({ where: { needsSupport: true }, select: { studentId: true } });
-             const uniqueStudents = new Set(reports.map(r => r.studentId));
-             studentsNeedingSupport = uniqueStudents.size;
-        }
+        const needsSupportReports = await prisma.weeklyReport.findMany({ where: { needsSupport: true }, select: { studentId: true } });
+        studentsNeedingSupport = new Set(needsSupportReports.map(r => r.studentId)).size;
 
         const activeAlertsCount = await prisma.alert.count({ where: { resolved: false } });
 
-        const pathways = await prisma.pathway.findMany({ include: { studentProfiles: true } });
-
         const typeGroups = await prisma.alert.groupBy({ by: ['type'], _count: { id: true } });
         const alertDistribution = typeGroups.map(g => ({ type: g.type, count: g._count.id }));
+
+        const recentActivity = await prisma.auditLog.findMany({
+            orderBy: { createdAt: 'desc' },
+            take: 10
+        });
+
+        // Submission trend (last 7 days)
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const trend = await prisma.weeklyReport.groupBy({
+            by: ['createdAt'],
+            _count: { id: true },
+            where: { createdAt: { gte: sevenDaysAgo } },
+            orderBy: { createdAt: 'asc' }
+        });
+        const submissionTrend = trend.map(t => ({ date: t.createdAt.toISOString().split('T')[0], count: t._count.id }));
+
+        // Class performance aggregation
+        const allRatings = await prisma.classRating.findMany();
+        const performance = {
+            EXCEEDING: allRatings.filter(r => r.rating === 'EXCEEDING').length,
+            MEETING: allRatings.filter(r => r.rating === 'MEETING').length,
+            APPROACHING: allRatings.filter(r => r.rating === 'APPROACHING').length,
+            BEGINNING: allRatings.filter(r => r.rating === 'BEGINNING').length,
+        };
 
         res.json({
             totalStudents,
@@ -579,21 +644,16 @@ router.get('/admin/analytics', authMiddleware, roleMiddleware(['ADMIN']), async 
             totalProgramManagers: await prisma.user.count({ where: { role: 'PROGRAM_MANAGER', isActive: true } }),
             totalPathways: await prisma.pathway.count({ where: { isActive: true } }),
             totalClasses: await prisma.classModel.count({ where: { isActive: true } }),
-            submittedReportsThisCycle: cycle ? await prisma.weeklyReport.count({ where: { cycleId: cycle.id } }) : 0,
+            submittedReportsThisCycle: cycle ? await prisma.weeklyReport.count({ where: { cycleId: cycle.id, status: 'SUBMITTED' } }) : 0,
             submissionRate,
             reviewedRate,
             overdueReports,
             studentsNeedingSupport,
             activeAlerts: activeAlertsCount,
             alertDistribution,
-            // Provide empty arrays instead of random numbers
-            classPerformance: { overall: { EXCEEDING: 0, MEETING: 0, APPROACHING: 0, BEGINNING: 0 }, byPathway: [] },
-            submissionTrend: [],
-            topCoaches: [],
-            topPathways: [],
-            classesNeedingAttention: [],
-            recent30DaySubmissions: [],
-            recentActivity: []
+            classPerformance: { overall: performance, byPathway: [] },
+            submissionTrend,
+            recentActivity
         });
     } catch(e) {
         res.status(500).json({ error: 'Server error' });
@@ -905,9 +965,17 @@ router.get('/admin/audit', authMiddleware, roleMiddleware(['ADMIN']), async (req
 
 router.get('/targeted-questions', authMiddleware, async (req: any, res: any) => {
     try {
-        // Mock returning questions
+        const where: any = { isActive: true };
+        if (req.user.role === 'STUDENT') {
+            where.studentId = req.user.id;
+        } else if (req.user.role === 'PROGRAM_MANAGER') {
+            where.student = { studentProfile: { programManagerId: req.user.id } };
+        } else if (req.user.role === 'COACH') {
+            where.student = { studentProfile: { coachId: req.user.id } };
+        }
+        
         const questions = await prisma.targetedQuestion.findMany({
-            where: { isActive: true },
+            where,
             include: { cycle: true }
         });
         res.json(questions);
@@ -919,8 +987,19 @@ router.get('/targeted-questions', authMiddleware, async (req: any, res: any) => 
 router.post('/targeted-questions', authMiddleware, roleMiddleware(['ADMIN', 'PROGRAM_MANAGER']), async (req: any, res: any) => {
     try {
         const { question, studentId, cycleId } = req.body;
+        
+        if (req.user.role === 'PROGRAM_MANAGER') {
+            const student = await prisma.user.findUnique({
+                where: { id: studentId },
+                include: { studentProfile: true }
+            });
+            if (student?.studentProfile?.programManagerId !== req.user.id) {
+                return res.status(403).json({ error: 'Unauthorized to target this student' });
+            }
+        }
+        
         const created = await prisma.targetedQuestion.create({
-            data: { question, studentId, cycleId, creatorId: (req as any).user?.id }
+            data: { question, studentId, cycleId, creatorId: req.user.id }
         });
         res.json(created);
     } catch(e) {
@@ -931,6 +1010,13 @@ router.post('/targeted-questions', authMiddleware, roleMiddleware(['ADMIN', 'PRO
 router.delete('/targeted-questions', authMiddleware, roleMiddleware(['ADMIN', 'PROGRAM_MANAGER']), async (req: any, res: any) => {
     try {
         const { id } = req.query;
+        const q = await prisma.targetedQuestion.findUnique({ where: { id: String(id) } });
+        if (!q) return res.status(404).json({ error: 'Not found' });
+        
+        if (req.user.role === 'PROGRAM_MANAGER' && q.creatorId !== req.user.id) {
+            return res.status(403).json({ error: 'Unauthorized to delete this question' });
+        }
+
         await prisma.targetedQuestion.update({
             where: { id: String(id) },
             data: { isActive: false }
@@ -974,9 +1060,56 @@ router.get('/student/reports', authMiddleware, roleMiddleware(['STUDENT']), asyn
     }
 });
 
-router.patch('/reports/:id/review', authMiddleware, roleMiddleware(['ADMIN', 'PROGRAM_MANAGER', 'COACH']), async (req, res) => {
+router.get('/reports/:id', authMiddleware, async (req: any, res: any) => {
+    try {
+        const report = await prisma.weeklyReport.findUnique({
+            where: { id: req.params.id },
+            include: {
+                student: { include: { studentProfile: { include: { coach: true, programManager: true, pathway: true, classEnrollments: { include: { classModel: true } } } } } },
+                cycle: true,
+                classRatings: { include: { classModel: true } },
+                targetedAnswers: { include: { question: true } },
+                coachFeedback: { include: { coach: true } }
+            }
+        });
+        if (!report) return res.status(404).json({ error: 'Report not found' });
+
+        const reqUser = req.user;
+        let authorized = false;
+        if (reqUser.role === 'ADMIN') authorized = true;
+        else if (reqUser.role === 'STUDENT' && report.studentId === reqUser.id) authorized = true;
+        else if (reqUser.role === 'COACH' && report.student.studentProfile?.coachId === reqUser.id) authorized = true;
+        else if (reqUser.role === 'PROGRAM_MANAGER' && report.student.studentProfile?.programManagerId === reqUser.id) authorized = true;
+        else if (reqUser.role === 'INSTRUCTOR') {
+             const enrollments = report.student.studentProfile?.classEnrollments || [];
+             authorized = enrollments.some((ce:any) => ce.classModel?.instructorId === reqUser.id);
+        }
+
+        if (!authorized) return res.status(403).json({ error: 'Unauthorized' });
+
+        res.json(report);
+    } catch(e) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+router.patch('/reports/:id/review', authMiddleware, roleMiddleware(['ADMIN', 'PROGRAM_MANAGER', 'COACH']), async (req: any, res: any) => {
     try {
         const { id } = req.params;
+        const report = await prisma.weeklyReport.findUnique({
+            where: { id },
+            include: { student: { include: { studentProfile: true } } }
+        });
+        if (!report) return res.status(404).json({ error: 'Report not found' });
+
+        const reqUser = req.user;
+        let authorized = false;
+        if (reqUser.role === 'ADMIN') authorized = true;
+        else if (reqUser.role === 'COACH' && report.student.studentProfile?.coachId === reqUser.id) authorized = true;
+        else if (reqUser.role === 'PROGRAM_MANAGER' && report.student.studentProfile?.programManagerId === reqUser.id) authorized = true;
+
+        if (!authorized) return res.status(403).json({ error: 'Unauthorized to review this report' });
+
         await prisma.weeklyReport.update({
             where: { id },
             data: { status: 'REVIEWED' }
@@ -1137,6 +1270,20 @@ router.get('/coach/alerts', authMiddleware, roleMiddleware(['COACH']), async (re
 
 router.patch('/alerts/:id/resolve', authMiddleware, roleMiddleware(['ADMIN', 'PROGRAM_MANAGER', 'COACH']), async (req: any, res: any) => {
     try {
+        const alertInfo = await prisma.alert.findUnique({
+            where: { id: req.params.id },
+            include: { student: { include: { studentProfile: true } } }
+        });
+        if (!alertInfo) return res.status(404).json({ error: 'Alert not found' });
+
+        const reqUser = req.user;
+        let authorized = false;
+        if (reqUser.role === 'ADMIN') authorized = true;
+        else if (reqUser.role === 'COACH' && alertInfo.student.studentProfile?.coachId === reqUser.id) authorized = true;
+        else if (reqUser.role === 'PROGRAM_MANAGER' && alertInfo.student.studentProfile?.programManagerId === reqUser.id) authorized = true;
+        
+        if (!authorized) return res.status(403).json({ error: 'Unauthorized to resolve this alert' });
+
         await prisma.alert.update({ where: { id: req.params.id }, data: { resolved: true } });
         res.json({ success: true });
     } catch(e) { res.status(500).json({ error: 'Server error' }); }
@@ -1287,6 +1434,20 @@ router.get('/pm/analytics', authMiddleware, roleMiddleware(['PROGRAM_MANAGER']),
 router.post('/reports/:id/feedback', authMiddleware, roleMiddleware(['ADMIN', 'PROGRAM_MANAGER', 'COACH']), async (req: any, res: any) => {
     try {
         const { text } = req.body;
+        const report = await prisma.weeklyReport.findUnique({
+            where: { id: req.params.id },
+            include: { student: { include: { studentProfile: true } } }
+        });
+        if (!report) return res.status(404).json({ error: 'Report not found' });
+
+        const reqUser = req.user;
+        let authorized = false;
+        if (reqUser.role === 'ADMIN') authorized = true;
+        else if (reqUser.role === 'COACH' && report.student.studentProfile?.coachId === reqUser.id) authorized = true;
+        else if (reqUser.role === 'PROGRAM_MANAGER' && report.student.studentProfile?.programManagerId === reqUser.id) authorized = true;
+
+        if (!authorized) return res.status(403).json({ error: 'Unauthorized to give feedback on this report' });
+
         const feedback = await prisma.coachFeedback.create({
             data: {
                 reportId: req.params.id,

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, Button } from '../../components/ui/Common';
+import { LoadingState, ErrorState, EmptyState } from '../../components/ui/States';
+import { safeFetch, downloadFile } from '../../lib/fetchUtils';
 import { useAuth } from '../../hooks/useAuth';
 import { Link } from 'react-router-dom';
 import { FileText, CheckCircle2, Clock, Edit3 } from 'lucide-react';
@@ -75,7 +77,11 @@ export function StudentDashboard() {
       <h2 className="text-xl font-bold border-b pb-4 mt-8">Past Reports</h2>
       <div className="space-y-4">
          {reports.length === 0 ? (
-           <p className="text-sm text-[#6B7280]">You haven't submitted any reports yet.</p>
+            <EmptyState 
+              title="First cycle?" 
+              message="Your submitted progress reports will appear here for your records."
+              className="py-12"
+            />
          ) : (
            reports.map(r => (
              <Card key={r.id} className="p-5 flex justify-between items-center transition-all hover:shadow-md">
@@ -89,8 +95,8 @@ export function StudentDashboard() {
                    </div>
                 </div>
                 <div className="flex gap-4">
-                  <Button variant="outline" className="text-xs px-3 h-8" onClick={() => window.location.href = `/api/reports/export-pdf?id=${r.id}`}>PDF</Button>
-                  <Button variant="outline" className="text-xs px-3 h-8" onClick={() => window.location.href = `/api/reports/export-docx?id=${r.id}`}>DOCX</Button>
+                  <Button variant="outline" className="text-xs px-3 h-8" onClick={() => handleExportPDF(r.id)}>PDF</Button>
+                  <Button variant="outline" className="text-xs px-3 h-8" onClick={() => handleExportDOCX(r.id)}>DOCX</Button>
                 </div>
              </Card>
            ))

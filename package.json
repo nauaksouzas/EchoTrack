@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "prisma generate && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "prisma generate && tsc --noEmit",
+    "postinstall": "prisma generate",
+    "generate": "prisma generate"
   },
   "dependencies": {
+    "@firebase/eslint-plugin-security-rules": "^0.0.2",
     "@google-cloud/firestore": "^8.6.0",
     "@google/genai": "^1.29.0",
     "@google/generative-ai": "^0.24.1",
@@ -29,6 +32,7 @@
     "docx": "^9.6.1",
     "dotenv": "^17.2.3",
     "esbuild": "^0.28.0",
+    "eslint": "^10.4.0",
     "express": "^4.22.2",
     "firebase": "^12.13.0",
     "firebase-admin": "^13.10.0",

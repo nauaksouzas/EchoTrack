@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card, Button, Input } from '../../components/ui/Common';
+import { safeFetch } from '../../lib/fetchUtils';
 import { Copy, Trash2, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -9,10 +10,11 @@ export function ProgramManagers() {
   const [email, setEmail] = useState('');
 
   const fetchPms = async () => {
-    const res = await fetch('/api/admin/invite', { credentials: "include" });
-    if (res.ok) {
-      const data = await res.json();
+    try {
+      const data = await safeFetch('/api/admin/invite');
       setPms(data);
+    } catch (e: any) {
+      console.error('Fetch PMs Failed:', e);
     }
   };
 
@@ -22,19 +24,18 @@ export function ProgramManagers() {
 
   const handleInvite = async (e: any) => {
     e.preventDefault();
-    const res = await fetch('/api/admin/invite', { credentials: "include", 
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, role: 'PROGRAM_MANAGER' })
-    });
-    if (res.ok) {
+    try {
+      await safeFetch('/api/admin/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, role: 'PROGRAM_MANAGER' })
+      });
       toast.success('Program Manager invited!');
       setName('');
       setEmail('');
       fetchPms();
-    } else {
-      const err = await res.json();
-      toast.error(err.error || 'Failed to invite');
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to invite');
     }
   };
 
@@ -44,10 +45,12 @@ export function ProgramManagers() {
   };
 
   const handleDeactivate = async (id: string) => {
-    const res = await fetch(`/api/admin/invite?id=${id}`, { credentials: "include",  method: 'DELETE' });
-    if (res.ok) {
+    try {
+      await safeFetch(`/api/admin/invite?id=${id}`, { method: 'DELETE' });
       toast.success('User deactivated');
       fetchPms();
+    } catch (e: any) {
+      toast.error(e.message || 'Error occurred');
     }
   };
 

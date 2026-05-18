@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 
+import { safeFetch } from '../lib/fetchUtils';
+
 interface User {
   id: string;
   email: string;
@@ -28,7 +30,10 @@ export function AuthProvider({ children }: { children: any }) {
         return res.json();
       })
       .then(data => setUser(data.user || null))
-      .catch(() => setUser(null))
+      .catch((e) => {
+        console.error('Session check failed:', e);
+        setUser(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 

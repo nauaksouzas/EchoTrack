@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card, Button, Input } from '../../components/ui/Common';
+import { safeFetch } from '../../lib/fetchUtils';
 import { Power, PowerOff } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -13,13 +14,15 @@ export function ReportCycles() {
   const [pathwayId, setPathwayId] = useState('');
 
   const fetchData = async () => {
-    const [cRes, pRes] = await Promise.all([
-      fetch('/api/admin/cycles', { credentials: 'include' }),
-      fetch('/api/admin/pathways', { credentials: 'include' })
-    ]);
-    if (cRes.ok && pRes.ok) {
-        setCycles(await cRes.json());
-        setPathways(await pRes.json());
+    try {
+      const [cData, pData] = await Promise.all([
+        safeFetch('/api/admin/cycles'),
+        safeFetch('/api/admin/pathways')
+      ]);
+      setCycles(cData);
+      setPathways(pData);
+    } catch (e: any) {
+      console.error('Fetch Cycles Failed:', e);
     }
   };
 
@@ -29,38 +32,34 @@ export function ReportCycles() {
 
   const handleCreate = async (e: any) => {
     e.preventDefault();
-    const res = await fetch('/api/admin/cycles', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ name, startDate, endDate, status: 'OPEN', pathwayId: pathwayId || null })
-    });
-    if (res.ok) {
+    try {
+      await safeFetch('/api/admin/cycles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, startDate, endDate, status: 'OPEN', pathwayId: pathwayId || null })
+      });
       toast.success('Cycle created');
       setName('');
       setStartDate('');
       setEndDate('');
       fetchData();
-    } else {
-      const err = await res.json();
-      toast.error(err.error || 'Failed to create');
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to create');
     }
   };
 
   const handleToggle = async (id: string, status: string) => {
     const newStatus = status === 'OPEN' ? 'CLOSED' : 'OPEN';
-    const res = await fetch(`/api/admin/cycles/${id}`, { 
-        method: 'PATCH', 
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ status: newStatus })
-    });
-    if (res.ok) {
-        toast.success(`Cycle ${newStatus.toLowerCase()}`);
-        fetchData();
-    } else {
-        const err = await res.json();
-        toast.error(err.error || 'Failed to update');
+    try {
+      await safeFetch(`/api/admin/cycles/${id}`, { 
+          method: 'PATCH', 
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+      });
+      toast.success(`Cycle ${newStatus.toLowerCase()}`);
+      fetchData();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to update');
     }
   };
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card, Button, Input } from '../../components/ui/Common';
+import { safeFetch } from '../../lib/fetchUtils';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -9,9 +10,11 @@ export function Pathways() {
   const [description, setDescription] = useState('');
 
   const fetchPathways = async () => {
-    const res = await fetch('/api/admin/pathways', { credentials: 'include' });
-    if (res.ok) {
-      setPathways(await res.json());
+    try {
+      const data = await safeFetch('/api/admin/pathways');
+      setPathways(data);
+    } catch (e: any) {
+      console.error('Fetch Pathways Failed:', e);
     }
   };
 
@@ -21,19 +24,18 @@ export function Pathways() {
 
   const handleCreate = async (e: any) => {
     e.preventDefault();
-    const res = await fetch('/api/admin/pathways', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ name, description })
-    });
-    if (res.ok) {
+    try {
+      await safeFetch('/api/admin/pathways', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description })
+      });
       toast.success('Pathway created');
       setName('');
       setDescription('');
       fetchPathways();
-    } else {
-      toast.error('Failed to create');
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to create');
     }
   };
 
@@ -42,10 +44,12 @@ export function Pathways() {
         toast.error('Cannot deactivate pathway with active students');
         return;
     }
-    const res = await fetch(`/api/admin/pathways?id=${id}`, { method: 'DELETE', credentials: 'include' });
-    if (res.ok) {
-        toast.success('Pathway deactivated');
-        fetchPathways();
+    try {
+      await safeFetch(`/api/admin/pathways?id=${id}`, { method: 'DELETE' });
+      toast.success('Pathway deactivated');
+      fetchPathways();
+    } catch (e: any) {
+      toast.error(e.message || 'Error occurred');
     }
   };
 

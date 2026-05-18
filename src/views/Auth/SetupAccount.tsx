@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Card, Button, Input } from '../../components/ui/Common';
+import { safeFetch } from '../../lib/fetchUtils';
 import { Logo } from '../../components/Logo';
 
 export function SetupAccount() {

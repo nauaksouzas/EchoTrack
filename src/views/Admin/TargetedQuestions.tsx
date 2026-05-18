@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card, Button, Input } from '../../components/ui/Common';
+import { safeFetch } from '../../lib/fetchUtils';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -11,16 +12,17 @@ export function TargetedQuestions() {
   const [studentId, setStudentId] = useState('');
 
   const fetchData = async () => {
-    const [qRes, sRes] = await Promise.all([
-      fetch('/api/targeted-questions', { credentials: 'include' }),
-      fetch('/api/admin/users', { credentials: 'include' })
-    ]);
-    if (qRes.ok && sRes.ok) {
-        setQuestions(await qRes.json());
-        const users = await sRes.json();
-        const activeStudents = users.filter((u: any) => u.role === 'STUDENT' && u.accountStatus === 'ACTIVE');
-        setStudents(activeStudents);
-        if (activeStudents.length > 0 && !studentId) setStudentId(activeStudents[0].id);
+    try {
+      const [qData, sData] = await Promise.all([
+        safeFetch('/api/targeted-questions'),
+        safeFetch('/api/admin/users')
+      ]);
+      setQuestions(qData);
+      const activeStudents = sData.filter((u: any) => u.role === 'STUDENT' && u.accountStatus === 'ACTIVE');
+      setStudents(activeStudents);
+      if (activeStudents.length > 0 && !studentId) setStudentId(activeStudents[0].id);
+    } catch (e: any) {
+      console.error('Fetch Data Failed:', e);
     }
   };
 
@@ -31,26 +33,27 @@ export function TargetedQuestions() {
   const handleCreate = async (e: any) => {
     e.preventDefault();
     if (!studentId) return toast.error('Student is required');
-    const res = await fetch('/api/targeted-questions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ question, studentId })
-    });
-    if (res.ok) {
+    try {
+      await safeFetch('/api/targeted-questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, studentId })
+      });
       toast.success('Question added');
       setQuestion('');
       fetchData();
-    } else {
-      toast.error('Failed to add question');
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to add question');
     }
   };
 
   const handleDeactivate = async (id: string) => {
-    const res = await fetch(`/api/targeted-questions?id=${id}`, { method: 'DELETE', credentials: 'include' });
-    if (res.ok) {
-        toast.success('Question deactivated');
-        fetchData();
+    try {
+      await safeFetch(`/api/targeted-questions?id=${id}`, { method: 'DELETE' });
+      toast.success('Question deactivated');
+      fetchData();
+    } catch (e: any) {
+      toast.error(e.message || 'Error occurred');
     }
   };
 

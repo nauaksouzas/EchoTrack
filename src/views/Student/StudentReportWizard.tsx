@@ -119,6 +119,8 @@ export function StudentReportWizard() {
     }
   };
 
+  if (fetching) return <div className="flex items-center justify-center p-20">Loading wizard...</div>;
+
   const performanceLabels = ['EXCEEDING', 'MEETING', 'APPROACHING', 'BEGINNING'];
 
   if (contextLoading) {
@@ -216,6 +218,32 @@ export function StudentReportWizard() {
 
             {step === 3 && (
                <motion.div key="s3" initial={{opacity:0, x:20}} animate={{opacity:1, x:0}} exit={{opacity:0, x:-20}} className="space-y-6">
+                  <h2 className="text-xl font-bold border-b pb-4">Targeted Questions</h2>
+                  {questions.length === 0 ? (
+                    <div className="p-10 text-center text-gray-500">No specific questions for you this cycle.</div>
+                  ) : (
+                    <div className="space-y-6">
+                       {questions.map(q => (
+                         <div key={q.id}>
+                            <label className="text-sm font-bold block mb-2">{q.question}</label>
+                            <textarea 
+                                className="w-full h-24 p-3 bg-[#F5F5F5] border border-[#E5E7EB] rounded-xl outline-none" 
+                                value={targetedAnswers[q.id] || ''} 
+                                onChange={e => setTargetedAnswers(prev => ({...prev, [q.id]: e.target.value}))}
+                            />
+                         </div>
+                       ))}
+                    </div>
+                  )}
+                  <div className="flex justify-between pt-4">
+                     <Button variant="outline" onClick={handleBack}>Back</Button>
+                     <Button onClick={handleNext}>Next Step</Button>
+                  </div>
+               </motion.div>
+            )}
+            
+            {step === 4 && (
+               <motion.div key="s4" initial={{opacity:0, x:20}} animate={{opacity:1, x:0}} exit={{opacity:0, x:-20}} className="space-y-6">
                   <h2 className="text-xl font-bold border-b pb-4">Progress & Events</h2>
                   <Input label="What did you work on or learn this week?" value={formData.academicProgress} onChange={(v: string) => setFormData(f => ({...f, academicProgress: v}))} />
                   <Input label="What important events happened this week?" value={formData.events} onChange={(v: string) => setFormData(f => ({...f, events: v}))} />
@@ -227,8 +255,8 @@ export function StudentReportWizard() {
                </motion.div>
             )}
 
-            {step === 4 && (
-               <motion.div key="s4" initial={{opacity:0, x:20}} animate={{opacity:1, x:0}} exit={{opacity:0, x:-20}} className="space-y-6">
+            {step === 5 && (
+               <motion.div key="s5" initial={{opacity:0, x:20}} animate={{opacity:1, x:0}} exit={{opacity:0, x:-20}} className="space-y-6">
                   <h2 className="text-xl font-bold border-b pb-4">Challenges</h2>
                   <div className="flex flex-wrap gap-2">
                      {['Academic', 'Personal', 'Health', 'Time Management', 'Financial', 'Technology'].map(tag => (
